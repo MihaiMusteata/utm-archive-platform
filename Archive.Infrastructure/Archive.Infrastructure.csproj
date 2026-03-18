@@ -1,0 +1,53 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Archive.Domain\Archive.Domain.csproj" />
+    <ProjectReference Include="..\Archive.Application\Archive.Application.csproj" />
+    <ProjectReference Include="..\Archive.Contracts\Archive.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="DependencyInjection.cs" />
+    <Compile Include="Options/JwtOptions.cs" />
+    <Compile Include="Options/StorageOptions.cs" />
+    <Compile Include="Persistence/ArchiveDbContext.cs" />
+    <Compile Include="Persistence/ArchiveDbContextFactory.cs" />
+    <Compile Include="Persistence/DatabaseSeeder.cs" />
+    <Compile Include="Persistence/Migrations/20260317081315_InitialCreate.Designer.cs" />
+    <Compile Include="Persistence/Migrations/20260317081315_InitialCreate.cs" />
+    <Compile Include="Persistence/Migrations/ArchiveDbContextModelSnapshot.cs" />
+    <Compile Include="Services/AuditService.cs" />
+    <Compile Include="Services/AuthService.cs" />
+    <Compile Include="Services/DashboardService.cs" />
+    <Compile Include="Services/DocumentsService.cs" />
+    <Compile Include="Services/JwtTokenService.cs" />
+    <Compile Include="Services/LocalFileStorageService.cs" />
+    <Compile Include="Services/MappingExtensions.cs" />
+    <Compile Include="Services/NomenclatureService.cs" />
+    <Compile Include="Services/Pbkdf2PasswordHasher.cs" />
+    <Compile Include="Services/QueryPagingExtensions.cs" />
+    <Compile Include="Services/RolesService.cs" />
+    <Compile Include="Services/StudentsService.cs" />
+    <Compile Include="Services/SystemDateTimeProvider.cs" />
+    <Compile Include="Services/UsersService.cs" />
+  </ItemGroup>
+
+</Project>

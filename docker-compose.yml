@@ -1,0 +1,97 @@
+services:
+  traefik:
+    image: traefik:v3.4
+    container_name: archive-traefik
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    ports:
+      - "${ARCHIVE_PUBLIC_PORT:-3232}:3232"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+    restart: unless-stopped
+    networks:
+      - archive_proxy
+
+  archive-db:
+    image: postgres:17-alpine
+    container_name: archive-db
+    environment:
+      POSTGRES_DB: ${ARCHIVE_POSTGRES_DB:-utm_archive}
+      POSTGRES_USER: ${ARCHIVE_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${ARCHIVE_POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - archive_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${ARCHIVE_POSTGRES_USER:-postgres} -d ${ARCHIVE_POSTGRES_DB:-utm_archive}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - archive_internal
+
+  archive-api:
+    build:
+      context: .
+      dockerfile: Archive.API/Dockerfile
+    container_name: archive-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Database: Host=archive-db;Port=5432;Database=${ARCHIVE_POSTGRES_DB:-utm_archive};Username=${ARCHIVE_POSTGRES_USER:-postgres};Password=${ARCHIVE_POSTGRES_PASSWORD:-postgres}
+      Jwt__Issuer: ${ARCHIVE_JWT_ISSUER:-utm-archive-platform}
+      Jwt__Audience: ${ARCHIVE_JWT_AUDIENCE:-utm-archive-platform}
+      Jwt__SigningKey: ${ARCHIVE_JWT_SIGNING_KEY:-ChangeThisJwtSigningKeyForProduction1234567890}
+      Storage__RootPath: /data/uploads
+    volumes:
+      - archive_uploads:/data/uploads
+    depends_on:
+      archive-db:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=archive_proxy
+      - traefik.http.routers.archive-api.rule=PathPrefix(`/api`) || PathPrefix(`/swagger`) || PathPrefix(`/health`)
+      - traefik.http.routers.archive-api.entrypoints=web
+      - traefik.http.routers.archive-api.priority=100
+      - traefik.http.services.archive-api.loadbalancer.server.port=8080
+    restart: unless-stopped
+    networks:
+      - archive_proxy
+      - archive_internal
+
+  archive-client:
+    build:
+      context: .
+      dockerfile: Archive.Client/client/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: archive-client
+    depends_on:
+      - archive-api
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=archive_proxy
+      - traefik.http.routers.archive-client.rule=PathPrefix(`/`)
+      - traefik.http.routers.archive-client.entrypoints=web
+      - traefik.http.routers.archive-client.priority=1
+      - traefik.http.services.archive-client.loadbalancer.server.port=80
+    restart: unless-stopped
+    networks:
+      - archive_proxy
+
+volumes:
+  archive_postgres_data:
+  archive_uploads:
+
+networks:
+  archive_proxy:
+    name: archive_proxy
+  archive_internal:
+    name: archive_internal
