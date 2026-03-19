@@ -27,11 +27,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK
+      - name: Setup .NET SDK with NuGet cache
+        if: ${{ hashFiles('**/packages.lock.json') != '' }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
           cache: true
+
+      - name: Setup .NET SDK
+        if: ${{ hashFiles('**/packages.lock.json') == '' }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
 
       - name: Restore backend dependencies
         run: dotnet restore Archive.sln
@@ -69,15 +76,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js with npm cache
+        if: ${{ hashFiles('Archive.Client/client/package-lock.json') != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: Archive.Client/client/package-lock.json
 
+      - name: Setup Node.js
+        if: ${{ hashFiles('Archive.Client/client/package-lock.json') == '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Install frontend dependencies
-        run: npm ci
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Lint frontend
         run: npm run lint
