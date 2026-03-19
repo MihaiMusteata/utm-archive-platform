@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  backend:
+    name: Backend (.NET)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+
+      - name: Restore backend dependencies
+        run: dotnet restore Archive.sln
+
+      - name: Build backend
+        run: dotnet build Archive.sln --configuration Release --no-restore
+
+      - name: Run backend tests when available
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test_projects=()
+          while IFS= read -r project; do
+            test_projects+=("$project")
+          done < <(find . -name '*.csproj' | sort | grep -E '(^|/).*(Tests?|IntegrationTests)\.csproj$' || true)
+
+          if [ ${#test_projects[@]} -eq 0 ]; then
+            echo "No .NET test projects found. Skipping dotnet test."
+            exit 0
+          fi
+
+          for project in "${test_projects[@]}"; do
+            dotnet test "$project" --configuration Release --no-build --verbosity normal
+          done
+
+  frontend:
+    name: Frontend (Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Archive.Client/client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Archive.Client/client/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Build frontend
+        run: npm run build
