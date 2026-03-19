@@ -80,7 +80,7 @@ export function StudentPersonalFields({ bootstrap, form, setForm, errors = {}, o
               value={form.lastName}
             />
           </Field>
-          <Field label="Nume mijlociu">
+          <Field label="Patronim">
             <Input onChange={(event) => setTopLevelValue('middleName', event.target.value)} value={form.middleName} />
           </Field>
           <Field error={getFieldError(errors, 'dateOfBirth')} label="Data nașterii">
