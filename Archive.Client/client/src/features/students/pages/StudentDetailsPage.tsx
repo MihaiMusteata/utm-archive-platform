@@ -11,6 +11,7 @@ import type { DocumentRecord, NomenclatureBootstrap, StudentDetail, StudentForm 
 import { clearFieldErrors, getFieldErrors, requiredField, type FieldErrors } from '../../../shared/utils/form-errors'
 import { showErrorToast, showSuccessToast } from '../../../shared/utils/toasts'
 import { createEmptyStudentForm, toStudentForm } from '../api/students'
+import { downloadStudentSheetPdf } from '../utils/student-sheet-export'
 import { validateStudentForm } from '../utils/student-form-validation'
 import { TabLoadingState, TabWindow } from './StudentDetailsUi'
 
@@ -43,7 +44,7 @@ const tabs = [
   { key: 'personal', label: 'Informații personale', icon: 'material-symbols:person-rounded' },
   { key: 'academic', label: 'Informații academice', icon: 'material-symbols:school-rounded' },
   { key: 'documents', label: 'Documente', icon: 'material-symbols:folder-rounded' },
-  { key: 'history', label: 'Istoric', icon: 'material-symbols:timeline-rounded' },
+  { key: 'history', label: 'Istoric', icon: 'material-symbols:history-rounded' },
   { key: 'notes', label: 'Note', icon: 'material-symbols:sticky-note-2-rounded' },
 ] satisfies TabItem[]
 
@@ -64,6 +65,7 @@ export function StudentDetailsPage() {
   const [noteContent, setNoteContent] = useState('')
   const [statusId, setStatusId] = useState('')
   const [statusReason, setStatusReason] = useState('')
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [uploadForm, setUploadForm] = useState({
     title: '',
     description: '',
@@ -305,6 +307,21 @@ export function StudentDetailsPage() {
     }
   }
 
+  const exportStudentSheet = async () => {
+    if (!detail) {
+      return
+    }
+
+    try {
+      setIsExportingPdf(true)
+      await downloadStudentSheetPdf(detail)
+    } catch (requestError) {
+      showErrorToast(getErrorMessage(requestError))
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
+
   if (error && !detail) {
     return (
       <Card className="border-amber-200/80 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/30">
@@ -391,10 +408,16 @@ export function StudentDetailsPage() {
               {detail.status} · {detail.academicInfo.studyProgram} · {detail.academicInfo.group}
             </p>
           </div>
-          <Button className="w-full md:w-auto" onClick={saveStudent} size="md">
-            <Icon icon="material-symbols:save-rounded" width={18} />
-            Salvează
-          </Button>
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-end xl:w-auto">
+            <Button className="w-full sm:w-auto" disabled={isExportingPdf} onClick={() => void exportStudentSheet()} size="md" variant="secondary">
+              <Icon icon="material-symbols:picture-as-pdf-rounded" width={18} />
+              {isExportingPdf ? 'Se generează PDF...' : 'Exportă PDF'}
+            </Button>
+            <Button className="w-full sm:w-auto" onClick={saveStudent} size="md">
+              <Icon icon="material-symbols:save-rounded" width={18} />
+              Salvează
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -452,7 +475,7 @@ function getActiveWindowMeta(activeTab: TabKey, detail: StudentDetail) {
       return {
         title: 'Istoric',
         badge: String(detail.history.length),
-        icon: 'material-symbols:timeline-rounded',
+        icon: 'material-symbols:history-rounded',
       }
     case 'notes':
       return {

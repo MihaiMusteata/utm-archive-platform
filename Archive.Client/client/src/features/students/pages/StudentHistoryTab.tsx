@@ -74,7 +74,7 @@ export function StudentHistoryTab({
 
       <Card className="space-y-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <SectionHeading icon="material-symbols:timeline-rounded" kicker="Cronologie" title="Istoric" />
+          <SectionHeading icon="material-symbols:history-rounded" kicker="Cronologie" title="Istoric" />
           <Badge>{detail.history.length}</Badge>
         </div>
 

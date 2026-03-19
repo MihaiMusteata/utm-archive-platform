@@ -214,7 +214,6 @@ public sealed class StudentsService(ArchiveDbContext dbContext) : IStudentsServi
             .Include(current => current.Contact)
             .Include(current => current.Addresses)
             .Include(current => current.AcademicRecord)
-            .Include(current => current.StatusHistory)
             .FirstOrDefaultAsync(current => current.Id == id, cancellationToken);
 
         if (student is null)
@@ -232,7 +231,11 @@ public sealed class StudentsService(ArchiveDbContext dbContext) : IStudentsServi
 
         if (student.Contact is null)
         {
-            student.Contact = new StudentContact();
+            student.Contact = new StudentContact
+            {
+                StudentId = student.Id
+            };
+            dbContext.StudentContacts.Add(student.Contact);
         }
 
         ApplyContactRequest(student.Contact, request.Contact);
@@ -240,23 +243,32 @@ public sealed class StudentsService(ArchiveDbContext dbContext) : IStudentsServi
         var address = student.Addresses.OrderByDescending(current => current.IsPrimary).FirstOrDefault();
         if (address is null)
         {
-            address = new StudentAddress { IsPrimary = true };
-            student.Addresses.Add(address);
+            address = new StudentAddress
+            {
+                StudentId = student.Id,
+                IsPrimary = true
+            };
+            dbContext.StudentAddresses.Add(address);
         }
 
         ApplyAddressRequest(address, request.Address);
 
         if (student.AcademicRecord is null)
         {
-            student.AcademicRecord = new StudentAcademicRecord();
+            student.AcademicRecord = new StudentAcademicRecord
+            {
+                StudentId = student.Id
+            };
+            dbContext.StudentAcademicRecords.Add(student.AcademicRecord);
         }
 
         ApplyAcademicRecordRequest(student.AcademicRecord, request.AcademicRecord);
 
         if (previousStatusId != request.StudentStatusId)
         {
-            student.StatusHistory.Add(new StudentStatusHistory
+            dbContext.StudentStatusHistory.Add(new StudentStatusHistory
             {
+                StudentId = student.Id,
                 PreviousStatusId = previousStatusId,
                 NewStatusId = request.StudentStatusId,
                 Reason = "Updated from student profile"
@@ -271,8 +283,7 @@ public sealed class StudentsService(ArchiveDbContext dbContext) : IStudentsServi
     {
         FeatureValidators.Validate(request);
 
-        var student = await dbContext.Students.Include(current => current.Notes).FirstOrDefaultAsync(current => current.Id == studentId, cancellationToken);
-        if (student is null)
+        if (!await dbContext.Students.AnyAsync(current => current.Id == studentId, cancellationToken))
         {
             throw new AppException("Student not found.", 404);
         }
@@ -284,7 +295,7 @@ public sealed class StudentsService(ArchiveDbContext dbContext) : IStudentsServi
             Content = request.Content.Trim()
         };
 
-        student.Notes.Add(note);
+        dbContext.StudentNotes.Add(note);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return new StudentNoteDto
@@ -301,7 +312,6 @@ public sealed class StudentsService(ArchiveDbContext dbContext) : IStudentsServi
         FeatureValidators.Validate(request);
 
         var student = await dbContext.Students
-            .Include(current => current.StatusHistory)
             .FirstOrDefaultAsync(current => current.Id == studentId, cancellationToken);
 
         if (student is null)
@@ -310,8 +320,13 @@ public sealed class StudentsService(ArchiveDbContext dbContext) : IStudentsServi
         }
 
         var previousStatusId = student.StudentStatusId;
+        if (previousStatusId == request.StudentStatusId)
+        {
+            return await GetStudentStatusHistoryAsync(studentId, cancellationToken);
+        }
+
         student.StudentStatusId = request.StudentStatusId;
-        student.StatusHistory.Add(new StudentStatusHistory
+        dbContext.StudentStatusHistory.Add(new StudentStatusHistory
         {
             StudentId = studentId,
             PreviousStatusId = previousStatusId,
@@ -321,6 +336,11 @@ public sealed class StudentsService(ArchiveDbContext dbContext) : IStudentsServi
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        return await GetStudentStatusHistoryAsync(studentId, cancellationToken);
+    }
+
+    private async Task<IReadOnlyCollection<StudentStatusHistoryDto>> GetStudentStatusHistoryAsync(Guid studentId, CancellationToken cancellationToken)
+    {
         return await dbContext.StudentStatusHistory
             .AsNoTracking()
             .Where(history => history.StudentId == studentId)
@@ -330,8 +350,8 @@ public sealed class StudentsService(ArchiveDbContext dbContext) : IStudentsServi
             .Select(history => new StudentStatusHistoryDto
             {
                 Id = history.Id,
-                PreviousStatus = history.PreviousStatus!.Name,
-                NewStatus = history.NewStatus!.Name,
+                PreviousStatus = history.PreviousStatus != null ? history.PreviousStatus.Name : null,
+                NewStatus = history.NewStatus != null ? history.NewStatus.Name : string.Empty,
                 Reason = history.Reason,
                 ChangedAt = history.ChangedAt
             })

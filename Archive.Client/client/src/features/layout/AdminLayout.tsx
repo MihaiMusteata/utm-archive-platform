@@ -16,11 +16,17 @@ export function AdminLayout() {
   const navigation = getVisibleNavigation(user)
   const canViewNomenclatures = navigation.some((item) => item.to === '/nomenclatures')
   const [isNomenclaturesOpen, setIsNomenclaturesOpen] = useState(location.pathname.startsWith('/nomenclatures'))
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isMobileNomenclaturesOpen, setIsMobileNomenclaturesOpen] = useState(location.pathname.startsWith('/nomenclatures'))
 
   useEffect(() => {
-    if (location.pathname.startsWith('/nomenclatures')) {
+    const isNomenclatureRoute = location.pathname.startsWith('/nomenclatures')
+    if (isNomenclatureRoute) {
       setIsNomenclaturesOpen(true)
+      setIsMobileNomenclaturesOpen(true)
     }
+
+    setIsMobileMenuOpen(false)
   }, [location.pathname])
 
   const currentSection = getCurrentRouteMeta(location.pathname)
@@ -159,7 +165,17 @@ export function AdminLayout() {
                   </div>
                 </div>
 
-                <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+                <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
+                  <Button
+                    className="min-w-0 justify-center text-center lg:hidden"
+                    onClick={() => {
+                      setIsMobileMenuOpen((current) => !current)
+                    }}
+                    variant="secondary"
+                  >
+                    <Icon icon={isMobileMenuOpen ? 'material-symbols:close-rounded' : 'material-symbols:menu-rounded'} width={18} />
+                    {isMobileMenuOpen ? 'Închide meniul' : 'Meniu'}
+                  </Button>
                   <Button
                     className="min-w-0 justify-center text-center sm:flex-none"
                     onClick={() => {
@@ -174,58 +190,127 @@ export function AdminLayout() {
                 </div>
               </div>
 
-              <div className="space-y-3 lg:hidden">
-                <nav className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {navigation.map((item) => {
-                    const isActive = location.pathname.startsWith(item.to)
+              {isMobileMenuOpen ? (
+                <div className="lg:hidden">
+                  <div className="overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/95 shadow-[0_28px_80px_-48px_rgba(15,23,42,0.55)] backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95">
+                    <div className="space-y-3 p-3">
+                      <nav className="space-y-2">
+                        {navigation.map((item) => {
+                          const isActive = location.pathname.startsWith(item.to)
+                          const isNomenclatures = item.to === '/nomenclatures'
 
-                    return (
-                      <NavLink
-                        className={cn(
-                          'rounded-xl border px-3 py-2 text-sm font-medium transition',
-                          isActive
-                            ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950'
-                            : 'border-slate-200/80 text-slate-600 hover:bg-slate-50 dark:border-slate-800/80 dark:text-slate-400 dark:hover:bg-slate-900',
-                        )}
-                        key={item.to}
-                        to={item.to}
-                      >
-                        <span className="flex items-center justify-center gap-2">
-                          <Icon icon={item.icon} width={18} />
-                          <span className="truncate">{item.label}</span>
-                        </span>
-                      </NavLink>
-                    )
-                  })}
-                </nav>
+                          return (
+                            <div className="space-y-2" key={item.to}>
+                              {isNomenclatures ? (
+                                <button
+                                  aria-expanded={isMobileNomenclaturesOpen}
+                                  className={cn(
+                                    'flex w-full items-center justify-between rounded-[1rem] border px-3.5 py-3 text-left text-sm font-medium transition',
+                                    isActive
+                                      ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950'
+                                      : 'border-slate-200/80 text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-800/80 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-50',
+                                  )}
+                                  onClick={() => {
+                                    if (!isActive) {
+                                      setIsMobileNomenclaturesOpen(true)
+                                      navigate(`/nomenclatures/${defaultCatalogKey}`)
+                                      return
+                                    }
 
-                {canViewNomenclatures && location.pathname.startsWith('/nomenclatures') ? (
-                  <nav className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {catalogEntries.map(([catalogKey, catalog]) => {
-                      const childPath = `/nomenclatures/${catalogKey}`
-                      const isChildActive = location.pathname === childPath
+                                    setIsMobileNomenclaturesOpen((current) => !current)
+                                  }}
+                                  type="button"
+                                >
+                                  <span className="flex items-center gap-2.5">
+                                    <span
+                                      className={cn(
+                                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition',
+                                        isActive
+                                          ? 'border-white/15 bg-white/10 text-white dark:border-slate-300/60 dark:bg-slate-950/70 dark:text-slate-100'
+                                          : 'border-slate-200/80 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-200',
+                                      )}
+                                    >
+                                      <Icon icon={item.icon} width={18} />
+                                    </span>
+                                    <span>{item.label}</span>
+                                  </span>
+                                  <Icon
+                                    icon={isMobileNomenclaturesOpen ? 'material-symbols:keyboard-arrow-up-rounded' : 'material-symbols:keyboard-arrow-down-rounded'}
+                                    width={20}
+                                  />
+                                </button>
+                              ) : (
+                                <NavLink
+                                  className={cn(
+                                    'block rounded-[1rem] border px-3.5 py-3 text-sm font-medium transition',
+                                    isActive
+                                      ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950'
+                                      : 'border-slate-200/80 text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-800/80 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-50',
+                                  )}
+                                  onClick={() => {
+                                    setIsMobileMenuOpen(false)
+                                  }}
+                                  to={item.to}
+                                >
+                                  <span className="flex items-center gap-2.5">
+                                    <span
+                                      className={cn(
+                                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition',
+                                        isActive
+                                          ? 'border-white/15 bg-white/10 text-white dark:border-slate-300/60 dark:bg-slate-950/70 dark:text-slate-100'
+                                          : 'border-slate-200/80 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-200',
+                                      )}
+                                    >
+                                      <Icon icon={item.icon} width={18} />
+                                    </span>
+                                    <span>{item.label}</span>
+                                  </span>
+                                </NavLink>
+                              )}
 
-                      return (
-                        <NavLink
-                          className={cn(
-                            'rounded-xl border px-3 py-2 text-sm font-medium transition',
-                            isChildActive
-                              ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950'
-                              : 'border-slate-200/80 text-slate-600 hover:bg-slate-50 dark:border-slate-800/80 dark:text-slate-400 dark:hover:bg-slate-900',
-                          )}
-                          key={catalogKey}
-                          to={childPath}
-                        >
-                          <span className="flex items-center gap-2">
-                            <Icon icon={catalog.icon} width={16} />
-                            <span className="truncate">{catalog.label}</span>
-                          </span>
-                        </NavLink>
-                      )
-                    })}
-                  </nav>
-                ) : null}
-              </div>
+                              {isNomenclatures && canViewNomenclatures && isMobileNomenclaturesOpen ? (
+                                <div className="space-y-1.5 pl-3">
+                                  {catalogEntries.map(([catalogKey, catalog]) => {
+                                    const childPath = `/nomenclatures/${catalogKey}`
+                                    const isChildActive = location.pathname === childPath
+
+                                    return (
+                                      <NavLink
+                                        className={cn(
+                                          'flex items-center gap-2.5 rounded-[0.95rem] border border-transparent px-3 py-2.5 text-sm transition',
+                                          isChildActive
+                                            ? 'bg-slate-200/70 text-slate-950 dark:bg-slate-900 dark:text-slate-50'
+                                            : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-900/80 dark:hover:text-slate-50',
+                                        )}
+                                        key={catalogKey}
+                                        onClick={() => {
+                                          setIsMobileMenuOpen(false)
+                                        }}
+                                        to={childPath}
+                                      >
+                                        <Icon icon={catalog.icon} width={16} />
+                                        <span className="truncate">{catalog.label}</span>
+                                      </NavLink>
+                                    )
+                                  })}
+                                </div>
+                              ) : null}
+                            </div>
+                          )
+                        })}
+                      </nav>
+
+                      <div className="rounded-[1.15rem] border border-slate-200/80 bg-slate-50/80 p-3.5 dark:border-slate-800/80 dark:bg-slate-900/70">
+                        <p className="text-xs font-medium uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+                          Autentificat ca
+                        </p>
+                        <p className="mt-2.5 text-sm font-semibold">{user?.fullName}</p>
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{user?.roles.map(localizeRoleName).join(', ')}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </header>
 
