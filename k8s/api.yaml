@@ -1,3 +1,4 @@
+# ConfigMap-ul pastreaza configuratiile nesensibile ale API-ului.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,6 +12,7 @@ data:
   ASPNETCORE_URLS: http://+:8080
   Storage__RootPath: /data/uploads
 ---
+# PVC-ul ofera spatiu persistent pentru fisierele incarcate de backend.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -26,6 +28,7 @@ spec:
     requests:
       storage: 10Gi
 ---
+# Service-ul expune API-ul intern in cluster pe portul 80 si il leaga de pod-urile backend.
 apiVersion: v1
 kind: Service
 metadata:
@@ -44,6 +47,7 @@ spec:
       port: 80
       targetPort: 8080
 ---
+# BackendConfig-ul defineste health check-ul folosit de load balancer-ul GKE pentru API.
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
 metadata:
@@ -62,6 +66,7 @@ spec:
     requestPath: /health
     port: 8080
 ---
+# Deployment-ul controleaza replica API-ului, injecteaza config/secrets si monteaza volumul persistent.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -72,6 +77,9 @@ metadata:
     app.kubernetes.io/part-of: utm-archive
 spec:
   replicas: 1
+  # API-ul foloseste un PVC ReadWriteOnce pentru upload-uri, deci actualizarea trebuie facuta prin inlocuire, nu rolling update paralel.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: archive-api
@@ -81,6 +89,7 @@ spec:
         app.kubernetes.io/name: archive-api
         app.kubernetes.io/part-of: utm-archive
     spec:
+      # Init container-ul blocheaza pornirea API-ului pana cand PostgreSQL raspunde in cluster.
       initContainers:
         - name: wait-for-postgres
           image: busybox:1.36
@@ -95,11 +104,13 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+          # ConfigMap-ul si Secret-ul combina configuratia publica cu datele sensibile ale aplicatiei.
           envFrom:
             - configMapRef:
                 name: archive-api-config
             - secretRef:
                 name: archive-api-secret
+          # Probele controleaza cand pod-ul e gata de trafic si cand trebuie repornit daca devine nesanatos.
           readinessProbe:
             httpGet:
               path: /health
@@ -123,6 +134,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 5
             failureThreshold: 24
+          # Requests/limits ajuta scheduler-ul sa aloce resurse predictibil pentru backend.
           resources:
             requests:
               cpu: 250m
@@ -130,6 +142,7 @@ spec:
             limits:
               cpu: "1"
               memory: 512Mi
+          # Upload-urile sunt stocate in volum persistent, nu in filesystem-ul efemer al containerului.
           volumeMounts:
             - name: uploads
               mountPath: /data/uploads
