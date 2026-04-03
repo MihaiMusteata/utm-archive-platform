@@ -42,7 +42,7 @@ export function AdminLayout() {
               <p className="text-xs font-medium uppercase tracking-[0.32em] text-slate-500 dark:text-slate-400">
                 Arhiva UTM
               </p>
-              <h1 className="text-[1.75rem] font-semibold tracking-tight">Platformă administrativă</h1>
+              <h1 className="text-[1.75rem] font-semibold tracking-tight">Platformă administrativă UTM</h1>
             </div>
 
             <nav className="space-y-1.5">
