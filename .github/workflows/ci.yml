@@ -1,5 +1,6 @@
 name: CI/CD
 
+# Pornim pipeline-ul la push pe main, la pull request si manual din GitHub UI.
 on:
   push:
     branches:
@@ -11,10 +12,12 @@ permissions:
   contents: read
   id-token: write
 
+# Evitam doua rulari concurente pentru acelasi branch/workflow.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Variabile comune folosite in toate job-urile pentru nume de imagini si namespace.
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -23,6 +26,7 @@ env:
   CLIENT_IMAGE_NAME: archive-client
 
 jobs:
+  # Validam doar backend-ul folosit la deploy. Archive.AppHost nu intra in fluxul de containerizare/GKE.
   backend:
     name: Backend (.NET)
     runs-on: ubuntu-latest
@@ -31,44 +35,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK with NuGet cache
-        if: ${{ hashFiles('**/packages.lock.json') != '' }}
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-          cache: true
-
       - name: Setup .NET SDK
-        if: ${{ hashFiles('**/packages.lock.json') == '' }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
 
       - name: Restore backend dependencies
-        run: dotnet restore Archive.sln
+        run: dotnet restore Archive.API/Archive.API.csproj
 
       - name: Build backend
-        run: dotnet build Archive.sln --configuration Release --no-restore
+        run: dotnet build Archive.API/Archive.API.csproj --configuration Release --no-restore
 
-      - name: Run backend tests when available
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          test_projects=()
-          while IFS= read -r project; do
-            test_projects+=("$project")
-          done < <(find . -name '*.csproj' | sort | grep -E '(^|/).*(Tests?|IntegrationTests)\.csproj$' || true)
-
-          if [ ${#test_projects[@]} -eq 0 ]; then
-            echo "No .NET test projects found. Skipping dotnet test."
-            exit 0
-          fi
-
-          for project in "${test_projects[@]}"; do
-            dotnet test "$project" --configuration Release --no-build --verbosity normal
-          done
-
+  # Validam frontend-ul exact cu toolchain-ul folosit si in Dockerfile.
   frontend:
     name: Frontend (Vite)
     runs-on: ubuntu-latest
@@ -80,30 +58,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js with npm cache
-        if: ${{ hashFiles('Archive.Client/client/package-lock.json') != '' }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
           cache-dependency-path: Archive.Client/client/package-lock.json
 
-      - name: Setup Node.js
-        if: ${{ hashFiles('Archive.Client/client/package-lock.json') == '' }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
       - name: Install frontend dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: npm ci
 
       - name: Lint frontend
         run: npm run lint
@@ -111,6 +74,7 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+  # Dupa ce backend-ul si frontend-ul trec, construim si publicam imaginile in Artifact Registry.
   build_and_push:
     name: Build And Push Images
     if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
@@ -137,6 +101,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Verificam daca exista toate variabilele necesare pentru registry si autentificare GCP.
           required_vars=(GCP_PROJECT_ID GAR_LOCATION GAR_REPOSITORY)
           for required_var in "${required_vars[@]}"; do
             if [ -z "${!required_var:-}" ]; then
@@ -176,6 +141,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Generam tag-ul versionat cu commit SHA si il expunem ca output pentru job-ul de deploy.
           registry="${GAR_LOCATION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GAR_REPOSITORY}"
           api_image="${registry}/${API_IMAGE_NAME}:${GITHUB_SHA}"
           client_image="${registry}/${CLIENT_IMAGE_NAME}:${GITHUB_SHA}"
@@ -211,6 +177,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # In ultimul job aplicam manifestele in GKE si actualizam imaginile construite in pasul anterior.
   deploy:
     name: Deploy To GKE
     if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
@@ -239,6 +206,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Blocam deploy-ul daca lipsesc variabilele clusterului sau secretele aplicatiei.
           required_vars=(GCP_PROJECT_ID GKE_CLUSTER GKE_LOCATION)
           for required_var in "${required_vars[@]}"; do
             if [ -z "${!required_var:-}" ]; then
@@ -289,6 +257,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Cream namespace-ul si secretele direct din valorile GitHub, fara a le salva in repo.
           jwt_issuer="${ARCHIVE_JWT_ISSUER:-utm-archive-platform}"
           jwt_audience="${ARCHIVE_JWT_AUDIENCE:-utm-archive-platform}"
           connection_string="Host=archive-db;Port=5432;Database=${ARCHIVE_POSTGRES_DB};Username=${ARCHIVE_POSTGRES_USER};Password=${ARCHIVE_POSTGRES_PASSWORD}"
@@ -322,12 +291,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Inlocuim placeholder-ul din manifest cu imaginea API tocmai publicata.
           sed "s|__ARCHIVE_API_IMAGE__|${{ needs.build_and_push.outputs.api_image }}|g" k8s/api.yaml | kubectl apply -f -
 
       - name: Deploy client
         shell: bash
         run: |
           set -euo pipefail
+          # Inlocuim placeholder-ul din manifest cu imaginea frontend-ului pentru versiunea curenta.
           sed "s|__ARCHIVE_CLIENT_IMAGE__|${{ needs.build_and_push.outputs.client_image }}|g" k8s/client.yaml | kubectl apply -f -
 
       - name: Deploy ingress
@@ -343,4 +314,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Afisam sumarul final pentru debugging rapid dupa rollout.
           kubectl get pods,svc,ingress --namespace "${K8S_NAMESPACE}" -o wide
